@@ -1,0 +1,59 @@
+body {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  width: 100%;
+}
+
+input {
+  margin: 4px;
+  font-size: 1.5rem;
+  vertical-align: middle;
+}
+
+.led {
+  width: 25px;
+  height: 25px;
+  background-color: white;
+  border: 1px solid black;
+  margin: 2px;
+}
+
+.command {
+  margin-top: 0px;
+  margin-bottom: 0px;
+  height: 44px;
+}
+
+.active {
+  background-color: black;
+}
+
+#container {
+  width: 232px;
+}
+
+#output {
+  width: 232px;
+  height: 116px;
+}
+
+#stored {
+  list-style-type: none;
+  padding-left: 0px;
+}
+
+body {
+  margin-left: 10px;
+}
+
+main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+#submit {
+  width: 100px;
+  margin: 20px 0;
+}

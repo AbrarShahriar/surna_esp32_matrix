@@ -17,7 +17,7 @@
 #define SERVICE_PROTOCOL "udp"
 #define SERVICE_PORT 5600
 
-String SERVER_NAME = "http://192.168.1.3:4001/";
+String SERVER_NAME = "https://fair-plum-lemur-boot.cyclic.app";
 
 MD_MAX72XX mx = MD_MAX72XX(HARDWARE_TYPE, CS_PIN, MAX_DEVICES);
 
@@ -241,7 +241,7 @@ if(initWiFi()) {
     // Connect to Wi-Fi network with SSID and password
     Serial.println("Setting AP (Access Point)");
     // NULL sets an open Access Point
-    WiFi.softAP("ESP-WIFI-MANAGER", NULL);
+    WiFi.softAP("SURNA-WIFI-MANAGER", NULL);
 
     IPAddress IP = WiFi.softAPIP();
     Serial.print("AP IP address: ");
