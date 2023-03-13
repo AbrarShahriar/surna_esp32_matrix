@@ -6,6 +6,7 @@
 #include <MD_MAX72xx.h>
 #include <HTTPClient.h>
 #include <ArduinoJSON.h>
+#include <ESPmDNS.h>
 
 #define HARDWARE_TYPE MD_MAX72XX::FC16_HW
 #define MAX_DEVICES 1
@@ -16,7 +17,7 @@
 #define SERVICE_PROTOCOL "udp"
 #define SERVICE_PORT 5600
 
-String SERVER_NAME = "https://fair-plum-lemur-boot.cyclic.app/";
+#define SERVER_NAME  "https://fair-plum-lemur-boot.cyclic.app/"
 
 MD_MAX72XX mx = MD_MAX72XX(HARDWARE_TYPE, CS_PIN, MAX_DEVICES);
 
@@ -71,6 +72,13 @@ void initSPIFFS() {
   Serial.println("SPIFFS mounted successfully");
 }
 
+void initMDns() {
+  if(!MDNS.begin("surna")) {
+     Serial.println("Error starting mDNS");
+     return;
+  }
+}
+
 // Read File from SPIFFS
 String readFile(fs::FS &fs, const char * path){
   Serial.printf("Reading file: %s\r\n", path);
@@ -116,7 +124,7 @@ bool initWiFi() {
   localGateway.fromString(gateway.c_str());
 
 
-  if (!WiFi.config(localIP, localGateway, subnet)){
+  if (!WiFi.config(localIP, localGateway, subnet, IPAddress(8, 8, 8, 8))){
     Serial.println("STA Failed to configure");
     return false;
   }
@@ -134,6 +142,7 @@ bool initWiFi() {
     }
   }
 
+
   Serial.println(WiFi.localIP());
   return true;
 }
@@ -150,20 +159,23 @@ void initMatrix() {
 
 void Task1code( void * parameter) {
   for(;;) {
+     
     if ((millis() - lastTime) > timerDelay) {
     //Check WiFi connection status
     if(WiFi.status()== WL_CONNECTED){
-      HTTPClient http;
-    
-      http.begin(SERVER_NAME);
+      HTTPClient https;
+
+      String serverPath = SERVER_NAME;
+      // https.begin(client, serverPath.c_str());
+      https.begin(serverPath.c_str());
       
       // Send HTTP GET request
-      int httpResponseCode = http.GET();
+      int httpResponseCode = https.GET();
       
       if (httpResponseCode>0) {
         Serial.print("HTTP Response code: ");
         Serial.println(httpResponseCode);
-        String payload = http.getString();
+        String payload = https.getString();
 
         DynamicJsonDocument doc(2048);
         deserializeJson(doc, payload);
@@ -178,7 +190,7 @@ void Task1code( void * parameter) {
         Serial.print("Error code: ");
         Serial.println(httpResponseCode);
       }
-      http.end();
+      https.end();
     }
     else {
       Serial.println("WiFi Disconnected");
@@ -288,9 +300,11 @@ if(initWiFi()) {
       delay(3000);
       ESP.restart();
     });
+
     server.begin();
   }
 
+  initMDns();
   initMatrix();
   Serial.println(xPortGetCoreID());
   xTaskCreatePinnedToCore(
@@ -304,5 +318,5 @@ if(initWiFi()) {
 }
 
 void loop() {
-   
+  
 }
