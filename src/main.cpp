@@ -3,7 +3,6 @@
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include "SPIFFS.h"
-#include <ESPmDNS.h>
 #include <MD_MAX72xx.h>
 #include <HTTPClient.h>
 #include <ArduinoJSON.h>
@@ -17,7 +16,7 @@
 #define SERVICE_PROTOCOL "udp"
 #define SERVICE_PORT 5600
 
-String SERVER_NAME = "https://fair-plum-lemur-boot.cyclic.app";
+String SERVER_NAME = "https://fair-plum-lemur-boot.cyclic.app/";
 
 MD_MAX72XX mx = MD_MAX72XX(HARDWARE_TYPE, CS_PIN, MAX_DEVICES);
 
@@ -141,15 +140,6 @@ bool initWiFi() {
 
 String processor(const String& var) {
   return String();
-}
-
-void initDNS() {
-  if(!MDNS.begin(MDNS_DEVICE_NAME)) {
-     Serial.println("Error encountered while starting mDNS");
-     return;
-  }
-
-  MDNS.addService(SERVICE_NAME, SERVICE_PROTOCOL, SERVICE_PORT);
 }
 
 void initMatrix() {
@@ -300,8 +290,6 @@ if(initWiFi()) {
     });
     server.begin();
   }
-
-  initDNS();
 
   initMatrix();
   Serial.println(xPortGetCoreID());
