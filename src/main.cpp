@@ -6,7 +6,50 @@
 #include <MD_MAX72xx.h>
 #include <HTTPClient.h>
 #include <ArduinoJSON.h>
-#include <ESPmDNS.h>
+#include <MD_Parola.h>
+#include <MaxMatrix.h>
+#include <pgmspace.h>
+
+PROGMEM const unsigned char CH[] = {
+    3, 8, B00000000, B00000000, B00000000, B00000000, B00000000, // space
+    4, 8, B00111110, B01000001, B01000001, B00111110, B00000000, // 0
+    3, 8, B01000010, B01111111, B01000000, B00000000, B00000000, // 1
+    4, 8, B01100010, B01010001, B01001001, B01000110, B00000000, // 2
+    4, 8, B00100010, B01000001, B01001001, B00110110, B00000000, // 3
+    4, 8, B00011000, B00010100, B00010010, B01111111, B00000000, // 4
+    4, 8, B00100111, B01000101, B01000101, B00111001, B00000000, // 5
+    4, 8, B00111110, B01001001, B01001001, B00110000, B00000000, // 6
+    4, 8, B01100001, B00010001, B00001001, B00000111, B00000000, // 7
+    4, 8, B00110110, B01001001, B01001001, B00110110, B00000000, // 8
+    4, 8, B00000110, B01001001, B01001001, B00111110, B00000000, // 9
+    2, 8, B01010000, B00000000, B00000000, B00000000, B00000000, // :
+    4, 8, B01111110, B00010001, B00010001, B01111110, B00000000, // A
+    4, 8, B01111111, B00001001, B00001001, B00000110, B00000000, // P
+    4, 8, B01000110, B01001001, B01001001, B00110010, B00000000, // S
+    5, 8, B00000001, B00000001, B01111111, B00000001, B00000001, // T
+};
+
+const char *rootCACertificate = R"literal(-----BEGIN CERTIFICATE-----
+MIIDQTCCAimgAwIBAgITBmyfz5m/jAo54vB4ikPmljZbyjANBgkqhkiG9w0BAQsF
+ADA5MQswCQYDVQQGEwJVUzEPMA0GA1UEChMGQW1hem9uMRkwFwYDVQQDExBBbWF6
+b24gUm9vdCBDQSAxMB4XDTE1MDUyNjAwMDAwMFoXDTM4MDExNzAwMDAwMFowOTEL
+MAkGA1UEBhMCVVMxDzANBgNVBAoTBkFtYXpvbjEZMBcGA1UEAxMQQW1hem9uIFJv
+b3QgQ0EgMTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBALJ4gHHKeNXj
+ca9HgFB0fW7Y14h29Jlo91ghYPl0hAEvrAIthtOgQ3pOsqTQNroBvo3bSMgHFzZM
+9O6II8c+6zf1tRn4SWiw3te5djgdYZ6k/oI2peVKVuRF4fn9tBb6dNqcmzU5L/qw
+IFAGbHrQgLKm+a/sRxmPUDgH3KKHOVj4utWp+UhnMJbulHheb4mjUcAwhmahRWa6
+VOujw5H5SNz/0egwLX0tdHA114gk957EWW67c4cX8jJGKLhD+rcdqsq08p8kDi1L
+93FcXmn/6pUCyziKrlA4b9v7LWIbxcceVOF34GfID5yHI9Y/QCB/IIDEgEw+OyQm
+jgSubJrIqg0CAwEAAaNCMEAwDwYDVR0TAQH/BAUwAwEB/zAOBgNVHQ8BAf8EBAMC
+AYYwHQYDVR0OBBYEFIQYzIU07LwMlJQuCFmcx7IQTgoIMA0GCSqGSIb3DQEBCwUA
+A4IBAQCY8jdaQZChGsV2USggNiMOruYou6r4lK5IpDB/G/wkjUu0yKGX9rbxenDI
+U5PMCCjjmCXPI6T53iHTfIUJrU6adTrCC2qJeHZERxhlbI1Bjjt/msv0tadQ1wUs
+N+gDS63pYaACbvXy8MWy7Vu33PqUXHeeE6V/Uq2V8viTO96LXFvKWlJbYK8U90vv
+o/ufQJVtMVT8QtPHRh8jrdkPSHCa2XV4cdFyQzR1bldZwgJcJmApzyMZFo6IQ6XU
+5MsI+yMRQ+hDKXJioaldXgjUkK642M4UwtBV8ob2xJNDd2ZhwLnoQdeXeGADbkpy
+rqXRfboQnoZsG4q5WTP468SQvvG5
+-----END CERTIFICATE-----
+)literal";
 
 #define HARDWARE_TYPE MD_MAX72XX::FC16_HW
 #define MAX_DEVICES 1
@@ -17,28 +60,32 @@
 #define SERVICE_PROTOCOL "udp"
 #define SERVICE_PORT 5600
 
-#define SERVER_NAME  "https://fair-plum-lemur-boot.cyclic.app/"
+#define SERVER_NAME "https://fair-plum-lemur-boot.cyclic.app/"
 
 MD_MAX72XX mx = MD_MAX72XX(HARDWARE_TYPE, CS_PIN, MAX_DEVICES);
+MD_Parola display = MD_Parola(HARDWARE_TYPE, CS_PIN, MAX_DEVICES);
 
 AsyncWebServer server(80);
 
 TaskHandle_t Task1;
+TaskHandle_t Task2;
 
-const char* PARAM_INPUT_1 = "ssid";
-const char* PARAM_INPUT_2 = "pass";
-const char* PARAM_INPUT_3 = "ip";
-const char* PARAM_INPUT_4 = "gateway";
+const char *PARAM_INPUT_1 = "ssid";
+const char *PARAM_INPUT_2 = "pass";
+const char *PARAM_INPUT_3 = "ip";
+const char *PARAM_INPUT_4 = "gateway";
 
 String ssid;
 String pass;
 String ip;
 String gateway;
 
-const char* ssidPath = "/ssid.txt";
-const char* passPath = "/pass.txt";
-const char* ipPath = "/ip.txt";
-const char* gatewayPath = "/gateway.txt";
+bool booted = false;
+
+const char *ssidPath = "/ssid.txt";
+const char *passPath = "/pass.txt";
+const char *ipPath = "/ip.txt";
+const char *gatewayPath = "/gateway.txt";
 
 IPAddress localIP;
 IPAddress localGateway;
@@ -50,71 +97,108 @@ const long interval = 10000;
 unsigned long lastTime = 0;
 unsigned long timerDelay = 6000;
 
-const int ledPin = BUILTIN_LED;
-String ledState;
-
-byte heart[8] = {0x00, 0x66, 0xFF, 0xFF, 0xFF, 0x7E, 0x3C, 0x18};
-byte heart2[8] = {0, 102, 255, 255, 255, 126, 60, 24};
-
-byte DATA[8];
-
-void drawShape(JsonArray data) {
-  for (int i = 0; i <= 7; i++) {
+void drawShape(JsonArray data)
+{
+  for (int i = 0; i <= 7; i++)
+  {
     mx.setRow(0, 0, i, data[i]);
   }
 }
 
+void drawBootAnim()
+{
+  Serial.println("drawbootanim");
+  byte stickStates[4][8] = {{0, 0, 32, 16, 8, 4, 0, 0}, {0, 0, 16, 16, 8, 8, 0, 0}, {0, 0, 8, 8, 16, 16, 0, 0}, {0, 0, 4, 8, 16, 32, 0, 0}};
+
+  for (byte j = 0; j < 4; j++)
+  {
+    if (booted == false)
+    {
+      for (byte i = 0; i < 7; i++)
+      {
+        mx.setRow(0, 0, i, stickStates[j][i]);
+      }
+      delay(500);
+    }
+  }
+}
+
+void drawWifiMode(byte mode)
+{
+  if (mode == 1)
+  {
+    byte AP[8] = {0, 0, 38, 86, 116, 84, 0, 0};
+    for (byte i = 0; i < 7; i++)
+    {
+      mx.setRow(0, 0, i, AP[i]);
+    }
+  }
+  else if (mode == 2)
+  {
+    byte ST[8] = {0, 0, 110, 68, 100, 36, 100, 0};
+    for (byte i = 0; i < 7; i++)
+    {
+      mx.setRow(0, 0, i, ST[i]);
+    }
+  }
+}
+
 // Initialize SPIFFS
-void initSPIFFS() {
-  if (!SPIFFS.begin(true)) {
+void initSPIFFS()
+{
+  if (!SPIFFS.begin(true))
+  {
     Serial.println("An error has occurred while mounting SPIFFS");
   }
   Serial.println("SPIFFS mounted successfully");
 }
 
-void initMDns() {
-  if(!MDNS.begin("surna")) {
-     Serial.println("Error starting mDNS");
-     return;
-  }
-}
-
 // Read File from SPIFFS
-String readFile(fs::FS &fs, const char * path){
+String readFile(fs::FS &fs, const char *path)
+{
   Serial.printf("Reading file: %s\r\n", path);
 
   File file = fs.open(path);
-  if(!file || file.isDirectory()){
+  if (!file || file.isDirectory())
+  {
     Serial.println("- failed to open file for reading");
     return String();
   }
-  
+
   String fileContent;
-  while(file.available()){
+  while (file.available())
+  {
     fileContent = file.readStringUntil('\n');
-    break;     
+    break;
   }
   return fileContent;
 }
 
 // Write file to SPIFFS
-void writeFile(fs::FS &fs, const char * path, const char * message){
+void writeFile(fs::FS &fs, const char *path, const char *message)
+{
   Serial.printf("Writing file: %s\r\n", path);
 
   File file = fs.open(path, FILE_WRITE);
-  if(!file){
+  if (!file)
+  {
     Serial.println("- failed to open file for writing");
     return;
   }
-  if(file.print(message)){
+  if (file.print(message))
+  {
     Serial.println("- file written");
-  } else {
+  }
+  else
+  {
     Serial.println("- frite failed");
   }
 }
 
-bool initWiFi() {
-  if(ssid=="" || ip==""){
+bool initWiFi()
+{
+  if (ssid == "" || ip == "")
+  {
     Serial.println("Undefined SSID or IP address.");
     return false;
   }
@@ -123,123 +207,165 @@ bool initWiFi() {
   localIP.fromString(ip.c_str());
   localGateway.fromString(gateway.c_str());
 
-
-  if (!WiFi.config(localIP, localGateway, subnet, IPAddress(8, 8, 8, 8))){
-    Serial.println("STA Failed to configure");
-    return false;
-  }
   WiFi.begin(ssid.c_str(), pass.c_str());
   Serial.println("Connecting to WiFi...");
+
+  // if (!WiFi.config(localIP, localGateway, subnet, IPAddress(8, 8, 8, 8)))
+  // {
+  //   Serial.println("STA Failed to configure");
+  //   return false;
+  // }
 
   unsigned long currentMillis = millis();
   previousMillis = currentMillis;
 
-  while(WiFi.status() != WL_CONNECTED) {
+  while (WiFi.status() != WL_CONNECTED)
+  {
     currentMillis = millis();
-    if (currentMillis - previousMillis >= interval) {
+    if (currentMillis - previousMillis >= interval)
+    {
       Serial.println("Failed to connect.");
       return false;
     }
   }
 
-
+  Serial.print("Go to: ");
   Serial.println(WiFi.localIP());
   return true;
 }
 
-String processor(const String& var) {
-  return String();
-}
-
-void initMatrix() {
+void initMatrix()
+{
   mx.begin();
-  mx.control(MD_MAX72XX::INTENSITY, MAX_INTENSITY);
+  mx.control(MD_MAX72XX::INTENSITY, 1);
   mx.clear();
 }
 
-void Task1code( void * parameter) {
-  for(;;) {
-     
-    if ((millis() - lastTime) > timerDelay) {
-    //Check WiFi connection status
-    if(WiFi.status()== WL_CONNECTED){
-      HTTPClient https;
+void initMdParolaDisplay()
+{
+  display.begin();
+  display.setIntensity(0);
+  display.displayClear();
+}
 
-      String serverPath = SERVER_NAME;
-      // https.begin(client, serverPath.c_str());
-      https.begin(serverPath.c_str());
-      
-      // Send HTTP GET request
-      int httpResponseCode = https.GET();
-      
-      if (httpResponseCode>0) {
-        Serial.print("HTTP Response code: ");
-        Serial.println(httpResponseCode);
-        String payload = https.getString();
+void displayIp(char *mode)
+{
+  const char *ipMsg = WiFi.localIP().toString().c_str();
+  const char *result = strcat(mode, ipMsg);
+  display.displayScroll(result, PA_CENTER, PA_SCROLL_LEFT, 100);
+}
 
-        DynamicJsonDocument doc(2048);
-        deserializeJson(doc, payload);
+void Task1code(void *parameter)
+{
+  for (;;)
+  {
 
-        JsonArray data = doc.as<JsonArray>();
-        Serial.print("loop() running on core ");
-        Serial.println(xPortGetCoreID());
-        Serial.println(payload);
-        drawShape(data);
+    if ((millis() - lastTime) > timerDelay)
+    {
+      // Check WiFi connection status
+      if (WiFi.status() == WL_CONNECTED)
+      {
+        HTTPClient https;
+
+        String serverPath = SERVER_NAME;
+        https.begin(serverPath.c_str(), rootCACertificate);
+
+        // Send HTTP GET request
+        int httpResponseCode = https.GET();
+
+        if (httpResponseCode > 0)
+        {
+          Serial.print("HTTP Response code: ");
+          Serial.println(httpResponseCode);
+          String payload = https.getString();
+
+          DynamicJsonDocument doc(2048);
+          deserializeJson(doc, payload);
+
+          JsonArray data = doc.as<JsonArray>();
+          Serial.print("loop() running on core ");
+          Serial.println(xPortGetCoreID());
+          Serial.println(payload);
+          drawShape(data);
+        }
+        else
+        {
+          Serial.print("Error code: ");
+          Serial.println(httpResponseCode);
+        }
+        https.end();
       }
-      else {
-        Serial.print("Error code: ");
-        Serial.println(httpResponseCode);
+      else
+      {
+        Serial.println("WiFi Disconnected");
       }
-      https.end();
+      lastTime = millis();
     }
-    else {
-      Serial.println("WiFi Disconnected");
-    }
-    lastTime = millis();
-  }
   }
 }
 
-void setup() {
+void Task2Code(void *parameter)
+{
+  for (;;)
+  {
+    if (booted == false)
+    {
+      drawBootAnim();
+    }
+  }
+}
+
+void setup()
+{
   Serial.begin(115200);
+  initMatrix();
+
+  xTaskCreatePinnedToCore(
+      Task2Code, /* Function to implement the task */
+      "Task2",   /* Name of the task */
+      1000,      /* Stack size in words */
+      NULL,      /* Task input parameter */
+      1,         /* Priority of the task */
+      &Task2,    /* Task handle. */
+      1);        /* Core where the task should run */
 
   initSPIFFS();
-
-  pinMode(ledPin, OUTPUT);
-  digitalWrite(ledPin, LOW);
 
   // Load values saved in SPIFFS
   ssid = readFile(SPIFFS, ssidPath);
   pass = readFile(SPIFFS, passPath);
   ip = readFile(SPIFFS, ipPath);
-  gateway = readFile (SPIFFS, gatewayPath);
+  gateway = readFile(SPIFFS, gatewayPath);
   Serial.println(ssid);
   Serial.println(pass);
   Serial.println(ip);
   Serial.println(gateway);
 
-  	
-if(initWiFi()) {
+  if (initWiFi())
+  {
+    booted = true;
+    // initMdParolaDisplay();
+    // char *mode = "STA: ";
+    // displayIp(mode);
+
+    drawWifiMode(2);
+
     // Route for root / web page
-    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-      request->send(SPIFFS, "/index.html", "text/html", false, processor);
-    });
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
+              { request->send(SPIFFS, "/index.html", "text/html", false); });
     server.serveStatic("/", SPIFFS, "/");
-    
+
     // Route to set GPIO state to HIGH
-    server.on("/on", HTTP_GET, [](AsyncWebServerRequest *request) {
-      digitalWrite(ledPin, HIGH);
-      request->send(SPIFFS, "/index.html", "text/html", false, processor);
-    });
+    server.on("/on", HTTP_GET, [](AsyncWebServerRequest *request)
+              { request->send(SPIFFS, "/index.html", "text/html", false); });
 
     // Route to set GPIO state to LOW
-    server.on("/off", HTTP_GET, [](AsyncWebServerRequest *request) {
-      digitalWrite(ledPin, LOW);
-      request->send(SPIFFS, "/index.html", "text/html", false, processor);
-    });
+    server.on("/off", HTTP_GET, [](AsyncWebServerRequest *request)
+              { request->send(SPIFFS, "/index.html", "text/html", false); });
     server.begin();
   }
-  else {
+  else
+  {
     // Connect to Wi-Fi network with SSID and password
     Serial.println("Setting AP (Access Point)");
     // NULL sets an open Access Point
@@ -247,16 +373,21 @@ if(initWiFi()) {
 
     IPAddress IP = WiFi.softAPIP();
     Serial.print("AP IP address: ");
-    Serial.println(IP); 
+    Serial.println(IP);
+
+    booted = true;
+    // char *mode = "AP: ";
+    // displayIp(mode);
+    drawWifiMode(1);
 
     // Web Server Root URL
-    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-      request->send(SPIFFS, "/wifimanager.html", "text/html");
-    });
-    
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
+              { request->send(SPIFFS, "/wifimanager.html", "text/html"); });
+
     server.serveStatic("/", SPIFFS, "/");
-    
-    server.on("/", HTTP_POST, [](AsyncWebServerRequest *request) {
+
+    server.on("/", HTTP_POST, [](AsyncWebServerRequest *request)
+              {
       int params = request->params();
       for(int i=0;i<params;i++){
         AsyncWebParameter* p = request->getParam(i);
@@ -298,25 +429,63 @@ if(initWiFi()) {
       }
       request->send(200, "text/plain", "Done. ESP will restart, connect to your router and go to IP address: " + ip);
       delay(3000);
-      ESP.restart();
-    });
+      ESP.restart(); });
 
     server.begin();
   }
 
-  initMDns();
-  initMatrix();
-  Serial.println(xPortGetCoreID());
-  xTaskCreatePinnedToCore(
-      Task1code, /* Function to implement the task */
-      "Task1", /* Name of the task */
-      10000,  /* Stack size in words */
-      NULL,  /* Task input parameter */
-      0,  /* Priority of the task */
-      &Task1,  /* Task handle. */
-      0); /* Core where the task should run */
+  // xTaskCreatePinnedToCore(
+  //     Task1code, /* Function to implement the task */
+  //     "Task1",   /* Name of the task */
+  //     10000,     /* Stack size in words */
+  //     NULL,      /* Task input parameter */
+  //     0,         /* Priority of the task */
+  //     &Task1,    /* Task handle. */
+  //     0);        /* Core where the task should run */
 }
 
-void loop() {
-  
+void loop()
+{
+  if ((millis() - lastTime) > timerDelay)
+  {
+    // Check WiFi connection status
+    if (WiFi.status() == WL_CONNECTED)
+    {
+      HTTPClient https;
+
+      String serverPath = SERVER_NAME;
+      // https.begin(client, serverPath.c_str());
+      https.begin(serverPath.c_str());
+
+      // Send HTTP GET request
+      int httpResponseCode = https.GET();
+
+      if (httpResponseCode > 0)
+      {
+        Serial.print("HTTP Response code: ");
+        Serial.println(httpResponseCode);
+        String payload = https.getString();
+
+        DynamicJsonDocument doc(2048);
+        deserializeJson(doc, payload);
+
+        JsonArray data = doc.as<JsonArray>();
+        Serial.print("loop() running on core ");
+        Serial.println(xPortGetCoreID());
+        Serial.println(payload);
+        drawShape(data);
+      }
+      else
+      {
+        Serial.print("Error code: ");
+        Serial.println(httpResponseCode);
+      }
+      https.end();
+    }
+    else
+    {
+      Serial.println("WiFi Disconnected");
+    }
+    lastTime = millis();
+  }
 }
