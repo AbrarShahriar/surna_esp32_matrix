@@ -65,7 +65,7 @@ IPAddress localGateway;
 IPAddress subnet(255, 255, 0, 0);
 
 unsigned long previousMillis = 0;
-const long interval = 10000;
+const long interval = 60000;
 
 unsigned long lastTime = 0;
 unsigned long timerDelay = 10000;
