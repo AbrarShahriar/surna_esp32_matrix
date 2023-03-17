@@ -6,7 +6,6 @@
 #include <MD_MAX72xx.h>
 #include <HTTPClient.h>
 #include <ArduinoJSON.h>
-#include <MD_Parola.h>
 
 const char *rootCACertificate = R"literal(-----BEGIN CERTIFICATE-----
 MIIDQTCCAimgAwIBAgITBmyfz5m/jAo54vB4ikPmljZbyjANBgkqhkiG9w0BAQsF
@@ -37,12 +36,11 @@ rqXRfboQnoZsG4q5WTP468SQvvG5
 #define SERVER_NAME "https://fair-plum-lemur-boot.cyclic.app/"
 
 MD_MAX72XX mx = MD_MAX72XX(HARDWARE_TYPE, CS_PIN, MAX_DEVICES);
-MD_Parola display = MD_Parola(HARDWARE_TYPE, CS_PIN, MAX_DEVICES);
 
 AsyncWebServer server(80);
 
-TaskHandle_t Task1;
 TaskHandle_t Task2;
+TaskHandle_t Task1;
 
 const char *PARAM_INPUT_1 = "ssid";
 const char *PARAM_INPUT_2 = "pass";
@@ -55,6 +53,7 @@ String ip;
 String gateway;
 
 bool booted = false;
+bool loading = false;
 
 const char *ssidPath = "/ssid.txt";
 const char *passPath = "/pass.txt";
@@ -69,10 +68,11 @@ unsigned long previousMillis = 0;
 const long interval = 10000;
 
 unsigned long lastTime = 0;
-unsigned long timerDelay = 6000;
+unsigned long timerDelay = 10000;
 
 void drawShape(JsonArray data)
 {
+  mx.clear();
   for (int i = 0; i <= 7; i++)
   {
     mx.setRow(0, 0, i, data[i]);
@@ -93,6 +93,7 @@ void drawBootAnim()
         mx.setRow(0, 0, i, stickStates[j][i]);
       }
       delay(500);
+      mx.clear();
     }
   }
 }
@@ -215,69 +216,6 @@ void initMatrix()
   mx.clear();
 }
 
-void initMdParolaDisplay()
-{
-  display.begin();
-  display.setIntensity(0);
-  display.displayClear();
-}
-
-void displayIp(char *mode)
-{
-  const char *ipMsg = WiFi.localIP().toString().c_str();
-  const char *result = strcat(mode, ipMsg);
-  display.displayScroll(result, PA_CENTER, PA_SCROLL_LEFT, 100);
-}
-
-void Task1code(void *parameter)
-{
-  for (;;)
-  {
-
-    if ((millis() - lastTime) > timerDelay)
-    {
-      // Check WiFi connection status
-      if (WiFi.status() == WL_CONNECTED)
-      {
-        HTTPClient https;
-
-        String serverPath = SERVER_NAME;
-        https.begin(serverPath.c_str(), rootCACertificate);
-
-        // Send HTTP GET request
-        int httpResponseCode = https.GET();
-
-        if (httpResponseCode > 0)
-        {
-          Serial.print("HTTP Response code: ");
-          Serial.println(httpResponseCode);
-          String payload = https.getString();
-
-          DynamicJsonDocument doc(2048);
-          deserializeJson(doc, payload);
-
-          JsonArray data = doc.as<JsonArray>();
-          Serial.print("loop() running on core ");
-          Serial.println(xPortGetCoreID());
-          Serial.println(payload);
-          drawShape(data);
-        }
-        else
-        {
-          Serial.print("Error code: ");
-          Serial.println(httpResponseCode);
-        }
-        https.end();
-      }
-      else
-      {
-        Serial.println("WiFi Disconnected");
-      }
-      lastTime = millis();
-    }
-  }
-}
-
 void Task2Code(void *parameter)
 {
   for (;;)
@@ -285,6 +223,103 @@ void Task2Code(void *parameter)
     if (booted == false)
     {
       drawBootAnim();
+    }
+  }
+}
+
+void drawIP()
+{
+  mx.clear();
+  uint16_t c[10] = {48, 49, 50, 51, 51, 53, 54, 55, 56, 57};
+  String a = WiFi.localIP().toString();
+  Serial.println(a);
+  char buf[a.length() + 1];
+  a.toCharArray(buf, a.length() + 1);
+  for (int i = 0; i < a.length(); i++)
+  {
+    Serial.println(buf[i]);
+
+    String x = String(buf[i]);
+    if (x == "0")
+    {
+      mx.setChar(5, c[0]);
+    }
+    else if (x == "1")
+    {
+      mx.setChar(5, c[1]);
+    }
+    else if (x == "2")
+    {
+      mx.setChar(5, c[2]);
+    }
+    else if (x == "3")
+    {
+      mx.setChar(5, c[3]);
+    }
+    else if (x == "4")
+    {
+      mx.setChar(5, c[4]);
+    }
+    else if (x == "5")
+    {
+      mx.setChar(5, c[5]);
+    }
+    else if (x == "6")
+    {
+      mx.setChar(5, c[6]);
+    }
+    else if (x == "7")
+    {
+      mx.setChar(5, c[7]);
+    }
+    else if (x == "8")
+    {
+      mx.setChar(5, c[8]);
+    }
+    else if (x == "9")
+    {
+      mx.setChar(5, c[9]);
+    }
+    else if (x == ".")
+    {
+      mx.setChar(5, 46);
+    }
+    delay(1000);
+    if (i != a.length() - 1)
+    {
+      mx.clear();
+    }
+  }
+}
+
+void drawLoading()
+{
+  mx.clear();
+  byte loadingFrames[4][8] = {{0, 0, 0, 0, 32, 16, 0, 0}, {0, 0, 16, 32, 0, 0, 0, 0}, {0, 0, 8, 4, 0, 0, 0, 0}, {0, 0, 0, 0, 4, 8, 0, 0}};
+
+  for (byte j = 0; j < 4; j++)
+  {
+    {
+      if (loading == true)
+      {
+        for (byte i = 0; i < 7; i++)
+        {
+          mx.setRow(0, 0, i, loadingFrames[j][i]);
+        }
+        delay(100);
+        mx.clear();
+      }
+    }
+  }
+}
+
+void Task1Code(void *parameter)
+{
+  for (;;)
+  {
+    if (loading == true)
+    {
+      drawLoading();
     }
   }
 }
@@ -318,11 +353,8 @@ void setup()
   if (initWiFi())
   {
     booted = true;
-    // initMdParolaDisplay();
-    // char *mode = "STA: ";
-    // displayIp(mode);
-
-    drawWifiMode(2);
+    delay(500);
+    drawIP();
 
     // Route for root / web page
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
@@ -350,8 +382,7 @@ void setup()
     Serial.println(IP);
 
     booted = true;
-    // char *mode = "AP: ";
-    // displayIp(mode);
+    delay(500);
     drawWifiMode(1);
 
     // Web Server Root URL
@@ -398,24 +429,23 @@ void setup()
             // Write file to save value
             writeFile(SPIFFS, gatewayPath, gateway.c_str());
           }
-          //Serial.printf("POST[%s]: %s\n", p->name().c_str(), p->value().c_str());
         }
       }
-      request->send(200, "text/plain", "Done. ESP will restart, connect to your router and go to IP address: " + ip);
+      request->send(200, "text/plain", "Done. ESP will restart, connect to your router");
       delay(3000);
       ESP.restart(); });
 
     server.begin();
   }
 
-  // xTaskCreatePinnedToCore(
-  //     Task1code, /* Function to implement the task */
-  //     "Task1",   /* Name of the task */
-  //     10000,     /* Stack size in words */
-  //     NULL,      /* Task input parameter */
-  //     0,         /* Priority of the task */
-  //     &Task1,    /* Task handle. */
-  //     0);        /* Core where the task should run */
+  xTaskCreatePinnedToCore(
+      Task1Code, /* Function to implement the task */
+      "Task1",   /* Name of the task */
+      1000,      /* Stack size in words */
+      NULL,      /* Task input parameter */
+      1,         /* Priority of the task */
+      &Task1,    /* Task handle. */
+      1);        /* Core where the task should run */
 }
 
 void loop()
@@ -428,11 +458,12 @@ void loop()
       HTTPClient https;
 
       String serverPath = SERVER_NAME;
-      // https.begin(client, serverPath.c_str());
-      https.begin(serverPath.c_str());
+      https.begin(serverPath.c_str(), rootCACertificate);
 
       // Send HTTP GET request
+      loading = true;
       int httpResponseCode = https.GET();
+      // int httpResponseCode = -1;
 
       if (httpResponseCode > 0)
       {
@@ -447,6 +478,9 @@ void loop()
         Serial.print("loop() running on core ");
         Serial.println(xPortGetCoreID());
         Serial.println(payload);
+
+        loading = false;
+        delay(200);
         drawShape(data);
       }
       else
